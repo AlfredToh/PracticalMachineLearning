@@ -1,0 +1,113 @@
+---
+title: "Sport Watch Classe Prediction"
+author: "Alfred Toh"
+date: "August 22, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+The project can be found on github: http://benakiva.github.io/practicalML/ and https://github.com/benakiva/practicalML
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+## Class
+The class below has been called for data model prediction purpose. 
+
+```{r}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+```
+
+## Data Loading
+Data has been downloaded from internet and load them into train and test file respectively. 
+
+```{r}
+trainURL <-"http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testURL <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+filename1 <- "pml-training.csv"
+filename2 <- "pml-testing.csv"
+
+download.file(url=trainURL, destfile=filename1)
+download.file(url=testURL, destfile=filename2)
+
+training <- read.csv("pml-training.csv",row.names=1,na.strings = "")
+testing <- read.csv("pml-testing.csv",row.names=1,na.strings = "")
+```
+
+## Data Cleaning
+In this section, the columns with NA value will be removed. Since the dataset are not time dependence, these values can be ignored. 
+
+```{r}
+nsv <- nearZeroVar(training, saveMetrics = TRUE)
+training <- training[ ,!nsv$nzv]
+testing  <- testing[ ,!nsv$nzv]
+
+training_filter_na <- training[,(colSums(is.na(training)) == 0)]
+testing_filter_na <- testing[,(colSums(is.na(testing)) == 0)]
+```
+
+## Data Partioning
+In this section we will split the training and test data at 70:30 ratio. 
+
+```{r}
+inTrain <- createDataPartition(y=training$classe, p=0.7, list=FALSE)
+training_clean <- training_filter_na[inTrain, ]
+testing_clean  <- training_filter_na[-inTrain, ]
+```
+
+
+## Random Forest Model
+
+After clean all the data, it ready to go into model. I have finetune the model to achieve a higher accuracy, after few rounds I have set the random forest model setting as below:
+Train control setting at cv (similar to K-fold method) and iteration time equal to 4 for higher accuracy. 
+
+```{r}
+set.seed(1234)
+Mod_RF <- train(classe ~ ., method = "rf", data = training_clean, importance = T, trControl = trainControl(method = "cv", number = 4))
+testing_pred <- predict(Mod_RF, newdata=testing_clean)
+confusionMatrix(testing_pred,testing_clean$classe)
+```
+
+## Prediction on Test Data
+We apply the model on our testing data 20 object to predict the results.
+
+```{r}
+predict(Mod_RF, newdata=testing)
+```
+
+Finally, we use the random forest model to predict on the testing set without the outcome variable and save the prediction output.
+
+```{r}
+testing_pred <- predict(Mod_RF, newdata=testing_filter_na)
+write_files <- function(x) {
+        n <- length(x)
+        for (i in 1:n) {
+                filename <- paste0("problem_id", i, ".txt")
+                write.table(x[i], file=filename, quote=FALSE, row.names=FALSE,col.names=FALSE)
+        }
+}
+write_files(testing_pred)
+```
+
+##Summary
+We used Random Forest Model with 4-fold, and the model accuracy is 99.97% with out-of-sample error approximately 0.9%
